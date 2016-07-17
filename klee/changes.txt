@@ -1,0 +1,213 @@
+Common.cpp - includes in line 11, 12
+FlatEvaluation.h -  added llvm::IsNAN  (absent in new API)
+Executor.cpp - #include "llvm/Support/FileSystem.h"
+               line 339 - ';' instead of ','
+               line 484 - Function* f = i;  ->  Function* f = &(*i)
+               line 564 - memory->allocate(..., i) ->  memory->allocate(..., &(*i))
+               ... - many other changes i -> &(*i)
+
+		line 1406 - if(!Visited.insert(gv))  -> if (!Visited.insert(gv).second)
+		
+               line 2149 - APFloat::divide() has 2 parameters 				
+               line 2168 - APFloat::mod() has only 1 parameter
+
+ExternalDispatcher.cpp  
+               line 26 - #include "JIT.h" -> #include "MCJIT.h"
+               line 155 - ExecutionEngine hasn't method recompileAndRelinkFunction(...);  
+               line 246 - GetElementPtrInst::Create(...) - now has additional 1 parameter Type* PointeeType 
+                  (may be NULL, it will infere internally by new version of function)
+
+StatsTracker.cpp
+              line 165 -   --it -> &(*--it)
+              line 167 -  getDirectCallTarget(prev) ->  getDirectCallTarget(*((llvm::CallSite*) prev)) 
+                          maybe it will be reasonable to change function signature
+                          llvm::Function *getDirectCallTarget(llvm::CallSite) ->
+                          llvm::Function *getDirectCallTarget(llvm::CallSite&)
+              line 199 -  sys::fs::exists(...)  has only 1 parameter
+              line 590 - getFunctionInfo(fnIt)  ->  getFunctionInfo(&*fnIt)
+              line 605 - res.push_back(it->begin()) -> res.push_back(&*it->begin())
+              line 607 - res.push_back(++BasicBlock::iterator(i)) -> res.push_back(&*(++BasicBlock::iterator(i))) 
+              line 655 - CallSite cs(it) -> CallSite cs(&*it)
+              line 659 - callTargets.insert(std::make_pair(it, ...) ->  callTargets.insert(std::make_pair(&*it, ...)
+              line 662 - callTargets[it]. -> callTargets[&*it]. 
+              line 664 - callTargets[it] -> callTargets[&*it]
+              line 687 - functionShortestPath[fnIt] -> functionShortestPath[&*fnIt]
+              line 689 - functionShortestPath[fnIt] -> functionShortestPath[&*fnIt]
+              line 692 - functionShortestPath[fnIt] -> functionShortestPath[&*fnIt]
+              line 700 - instructions.push_back(it) -> instructions.push_back(&*it)
+              line 701 - infos.getInfo(it) -> infos.getInfo(&*it)
+              line 782 - infos.getInfo(it) -> infos.getInfo(&*it)
+
+Checks.cpp
+              line 73 - i -> &*i
+              line 129 - i -> &*i
+
+InstructionInfoTable.cpp
+             API of class DILocation was changed:
+             line 90 - use DebugLoc instead of DILocation in parameter
+                static std::string getDSPIPath(DebugLoc& Loc) {
+                  std::string dir = Loc->getInlinedAt()->getDirectory();
+                  std::string file = Loc->getInlinedAt()->getFilename();
+             line 95 - DILocation(N) -> DebugLoc(N)
+             line 97 - Loc.getLineNumber() -> Loc.getLine()
+
+             line 131 - inst_begin(fnIt) -> inst_begin(&*fnIt)
+             line 139 - inst_begin(fnIt) -> inst_begin(&*fnIt)
+             line 196 - getInfo(f->begin()->begin()) -> getInfo(&*f->begin()->begin())
+
+InstrinsicCleaner.cpp
+             line 109 - GetElementPtrInst::Create(pDst, off, std::string(), ii)  ->  GetElementPtrInst::Create(NULL, pDst, off, std::string())
+             line 110 - GetElementPtrInst::Create(pSrc, off, std::string(), ii)  ->  GetElementPtrInst::Create(NULL, pSrc, off, std::string())
+             line 112 - GetElementPtrInst::Create(pDst, off, std::string(), ii)  ->  GetElementPtrInst::Create(NULL, pDst, off, std::string(), ii)
+             line 113 - GetElementPtrInst::Create(pSrc, off, std::string(), ii)  ->  GetElementPtrInst::Create(NULL, pSrc, off, std::string(), ii) 
+             line 127 - builder(ii->getParent(), ii)  ->  builder((*ii).getParent(), i)
+ 
+KModule.cpp
+	    line 50 - #include "llvm/PassManager.h"  ->   #include "llvm/IR/PassManager.h"		                         
+            line 193 - mainFn->begin()->begin()  ->   &*mainFn->begin()->begin()
+	    line 285 - result->addIncoming(i->getOperand(0), bbit)  ->  result->addIncoming(i->getOperand(0), &*bbit)
+            line 288 - BranchInst::Create(exit, bbit)  ->  BranchInst::Create(exit, &*bbit)
+
+	    PassManager class API changed!
+	    First method to work with new PassManager API:
+            line 50 - #include "llvm/PassManager.h"  ->   #include "llvm/IR/LegacyPathManager.h"
+	    line 299 - PassManager pm   ->  legacy::PathManager pm
+            line 367 - PassManager pm3  ->  legacy::PathManager pm3	
+
+            Second method to work with new PassManager API (needs some additional work):
+            line 299 - PassManager pm  ->   PassManager<llvm::Module> pm
+            line 300 - pm.add(new RaiseAsmPass())  ->   pm.addPass(new RaiseAsmPass())
+            line 301 - pm.add(new DivCheckPass())  ->   pm.addPass(new DivCheckPass());
+            line 302 - pm.add(new OvershiftCheckPass())  ->  pm.addPass(new OvershiftCheckPass())
+            line 307 - pm.add(new IntrinsicCleanerPass(*targetData, false))  ->   pm.addPass(new IntrinsicCleanerPass(*targetData, false))
+            line 367 - PassManager pm3  ->   PassManager<llvm::Module> pm3
+            line 368 - pm3.add(createCFGSimplificationPass())  ->   pm3.addPass(createCFGSimplificationPass())
+            line 371 - pm3.add(new LowerSwitchPass())  ->  pm3.addPass(new LowerSwitchPass())
+            line 372 - pm3.add(createLowerSwitchPass())  ->  pm3.addPass(createLowerSwitchPass())
+            line 375 - pm3.add(new IntrinsicCleanerPass(*targetData))  ->   pm3.addPass(new IntrinsicCleanerPass(*targetData))
+            line 376 - pm3.add(new PhiCleanerPass())  ->  pm3.addPass(new PhiCleanerPass())
+
+
+            line 445 - KFunction(it, this)  ->   KFunction(&*it, this) 
+            line 453 - functionMap.insert(std::make_pair(it, kf))  ->  functionMap.insert(std::make_pair(&*it, kf))
+
+	    line 514 - isa<MDNode>(v) - commented,  in LLVM 3.8 MDNode is not inherited from Value	
+
+            line 530 - BasicBlock *bb = bbit  ->  BasicBlock *bb = &*bbit 
+            line 545 - registerMap[it]   ->  registerMap[&*it] 
+            line 565 - ki->inst = it   ->  ki->inst = &*it
+            line 566 - ki->dest = registerMap[it]  ->  ki->dest = registerMap[it]
+            line 569 - CallSite cs(it)  ->   CallSite cs(&*it)
+
+LowerSwitch.cpp
+	    line 47 - I++   ->  &*i++
+            line 70 - Function::iterator FI = origBlock  ->  Function::iterator FI(origBlock)
+            line 107 - F->getBasicBlockList().insert(defaultBlock, newDefault)  ->  Function::iterator FI(defaultBlock);  F->getBasicBlockList().insert(FI, newDefault);
+
+ModuleUtil.cpp
+	   line 215 - object::Archive::child_iterator AI = archive->begin_children()  ->   object::Archive::child_iterator AI = archive->child_begin()
+           line 216 - AE = archive->end_children()  ->   AE = archive->child_end()
+
+           File system_error.h removed in LLVM 3.5!
+           line 220 - error_code ec = AI->getName(memberName)  ->  std::error_code ec = AI->get()->getName().getError()
+
+           File OwningPtr.h removed in LLVM 3.5!
+           line 232 - OwningPtr<object::Binary> child  ->  std::unique_ptr<object::Binary> child		
+           line 238 - OwingPtr<MemoryBuffer> buff  ->  std::unique_ptr<MemoryBuffer> buff
+
+	   line 233 - error_code ec = AI->getAsBinary(child)  ->  bool success = (bool) AI->get()->getAsBinary()
+           line 234 - if (ec != object::object_error::success)   ->  if (!success)
+
+           line 241 - error_code ec = AI->getMemoryBuffer(buff)  ->  std::error_code ec = AI->get()->getBuffer().getError()
+
+           line 251 - Result = ParseBitcodeFile(buff.get(), getGlobalContext(), &errorMessage)   ->  ErrorOr<std::unique_ptr<Module>> parse_err = parseBitcodeFile(*buff.get(), getGlobalContext());
+           line 253 - if(!Result)  ->  if(!parse_err)
+           line 255 - << errorMessage <<  ->   << parse_err <<
+
+           line 319 - add  std_unique_ptr<Module>& mptr(M);
+           line 320 - Linker::LinkModules(composite, M, Linker::DestroySource, &errorMessage) ->  Linker::linkModules(*composite, std::move(mptr), Flags::OverrideFromSrc)
+
+           line 373 - OwningPtr<MemoryBuffer> Buffer  -> ErrorOr<std::unique_ptr<MemoryBuffer> > Buffer = MemoryBuffer::getFile(libraryName)
+           line 374 - if (error_code ec = MemoryBuffer::getFile(libraryName,Buffer))  ->   if (!Buffer)
+           line 379 - sys::fs::file_magic magic = sys::fs::identify_magic(Buffer)  ->  sys::fs::file_magic magic = sys::fs::identify_magic(Buffer->get()->getBuffer())
+
+           line 385 - Module* Reult = 0   ->  deleted or commented                        
+           line 386 - Result = ParseBitcodeFile(Buffer.get(), Context, &ErrorMessage)  ->  ErrorOr<std::unique_ptr<Module> > Result = parseBitcodeFile(Buffer.get(), Context); 
+           line 389 - Linker::LinkModules(module, Result, Linker::DestroySource, &ErrorMessage)  ->  Linker::linkModules(*module, std::move(*Result), Linker::Flags::OverrideFromSrc)
+           line 393 - delete Reusult  ->  deleted or commented
+           line 397 - object::createBinary(Buffer->take(), arch)   ->  ErrorOr<std::unique_ptr<Binary> > ec = object::createBinary(*Buffer->get(), &Context)
+
+           line 396 - OwningPtr<object::Binary> arch  ->   std::unique_ptr<object::Binary> arch
+
+           line 413 - OwningPtr<object::Binary> obj   ->  std::unique_ptr<object::Binary> obj
+
+Optimize.cpp
+           line 19 - #include "llvm/PassManager.h"  ->  #include "llvm/IR/LegacyPassManager.h"
+           line 83 - PassManager &PM  ->  legacy::PassManager &PM
+           line 95 - PassManager &PM  -> legacy::PassManager &PM
+           line 118 - createFunctionAttrsPass()  - not present in LLVM 3.8 - TODO
+           line 169 - PassManager Passes  ->  legacy::PassManager Passes
+           line 183 - DataLayoutPass (or DataLayout in LLVM < 3.5) - not present in LLVM 3.8 - TODO   
+           line 240 - createFunctionAttrsPass()  - not present in LLVM 3.8 - TODO
+           line 241 - createGlobalsModRefPass()  - not present in LLVM 3.8 - TODO
+
+RaiseAsm.cpp
+           line 82 - TLI = TM->getTargetLowering()   - not present in LLVM 3.8 - TODO
+           line 88 - ii ->  &*ii
+
+QueryLoggingSolver.h
+           line 28 - std::string ErrorInfo  ->  std::error_code ErrorInfo 
+
+main.cpp
+           line 49 - add #include "llvm/Support/Path.h"
+	   line 311 - ds.flush() - now class raw_svector_ostream don't need explicit flush and method flush() deleted in this class
+           line 389 - raw_fd_ostream now has parameter 2 of std::error_code type
+           line 686 - add &* for iterator
+           line 688 - add &* for iterator
+           line 689 - add &* for iterator
+           line 1047 - function llvm::sys::fs::exists now has only 1 parameter
+           line 1090 - add &* for iterator
+           line 1149 - add &* for iterator
+           line 1150 - add &* for iterator
+           line 1269 - std::unique_ptr<MemoryBuffer> bptr(Buffer->get());  auto mainModuleOrError = getLazyBitcodeModule(std::move(bptr), ...)
+           line 1281 - mainModule = *mainModuleOrError  ->  mainModule = mainModuleOrError->get()
+           line 1282 - mainModule->materializeAllPermanently()   ->  mainModule->materializeAll()   
+  
+Modification to remove runtime errors:
+
+InstructionInfoTable.cpp
+	   line 90 - functions getDSPIPath and getInstructionDebugInfo rewrited
+             because semantics of MDNode is different in LLVM 3.8
+
+ModuleUtil.cpp
+	  line 441 - in function  getDirectCallTarget
+	
+StatsTracker.cpp
+	  line 167 - *(llvm::CallSite*)prev - suspicuous construction, don't work in C++11,
+                     -> CallSite cs(prev), than use cs in function getDirectCallTarget call  
+               
+KModule.cpp
+         line 161 - in functionm getStubFunctionForCtorList
+	            assert(cs->getNumOperands()==2 ...)   ->  assert(cs->getNumOperands()==3 ...)
+
+BoolReadWrile.ll  (test 8)
+	 line 8 - load i1* %mem   ->   load i1, i1* %mem  
+
+ConstantExpr.ll   (test 11)
+         line 73 - load i32* getelementptr    ->   TODO
+
+FloatingPointOpts.ll (test 12)
+        line 78, line 82 - call i32 (i8*, ...)*   ->   call i32 (i8*, ...)
+        line 81 - getelementptr [3 x i8]* @.strNL, i32 0, i32 0   ->  TODO
+
+ExternalDispatcher.cpp
+        Incorrect MCJIT mapping Function->address because Function is wrapped in special dispatcher 
+          function and any previous mapping is violated
+        in method executeCall:
+        lines 160 - 170 add mapping from dispatched function to address
+        
+Executor.cpp
+       in method callExternal Funcion - mysterious call of function "printf.l" - TODO
+
+ 
+
