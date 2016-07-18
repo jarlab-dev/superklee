@@ -614,7 +614,11 @@ std::string KleeHandler::getRunTimeLibraryPath(const char *argv0) {
   llvm::sys::path::remove_filename(toolRoot);
 
   SmallString<128> libDir;
-//  #define KLEE_INSTALL_RUNTIME_DIR "/home/bin"
+
+  #define KLEE_DIR "./klee_build"
+  #define KLEE_INSTALL_BIN_DIR "./klee_build"
+  #define KLEE_INSTALL_RUNTIME_DIR "./klee_build"
+
   if (strlen( KLEE_INSTALL_BIN_DIR ) != 0 &&
       strlen( KLEE_INSTALL_RUNTIME_DIR ) != 0 &&
       toolRoot.str().endswith( KLEE_INSTALL_BIN_DIR ))

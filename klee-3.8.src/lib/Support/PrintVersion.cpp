@@ -12,14 +12,20 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/CommandLine.h"
 
-#include "klee/Config/CompileTimeInfo.h"
+
+//@rodrijuana: comented as workaround to link
+//#include "klee/Config/CompileTimeInfo.h"
 
 void klee::printVersion()
 {
   llvm::outs() << PACKAGE_STRING " (" PACKAGE_URL ")\n";
   llvm::outs() << "  Built " __DATE__ " (" __TIME__ ")\n";
+#ifdef KLEE_BUILD_REVISION
   llvm::outs() << "  Build mode: " << KLEE_BUILD_MODE "\n";
+#endif
   llvm::outs() << "  Build revision: ";
+
+//@rodrijuana: still not handling KLEE_BUILD_REVISION env-var
 #ifdef KLEE_BUILD_REVISION
   llvm::outs() << KLEE_BUILD_REVISION "\n";
 #else
