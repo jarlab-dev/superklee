@@ -1,0 +1,10 @@
+cfe_build
+klee_build
+llvm_build
+stp_build
+minisat_build
+llvm-3.8.0.src
+compiler-rt_build/
+stp/
+minisat/
+README-1st.txt~
