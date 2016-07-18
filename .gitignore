@@ -2,3 +2,4 @@ compiler-rt
 llvm
 build*
 back_clang
+llvm_build

@@ -2433,7 +2433,7 @@ void CodeGenFunction::EmitCheck(
     ArrayRef<std::pair<llvm::Value *, SanitizerMask>> Checked,
     StringRef CheckName, ArrayRef<llvm::Constant *> StaticArgs,
     ArrayRef<llvm::Value *> DynamicArgs) {
-  assert(IsSanitizerScope);
+  //assert(IsSanitizerScope);
   assert(Checked.size() > 0);
 
   llvm::Value *FatalCond = nullptr;

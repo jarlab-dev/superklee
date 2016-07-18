@@ -86,6 +86,11 @@ public:
     return CGF.EmitCheckedLValue(E, TCK);
   }
 
+  void EmitTruncCheck( Value *Check,
+                       Value *Src,
+				       QualType SrcType, QualType DstType, 
+			  	       const Expr *E);
+  
   void EmitBinOpCheck(ArrayRef<std::pair<Value *, SanitizerMask>> Checks,
                       const BinOpInfo &Info);
 
@@ -148,11 +153,11 @@ public:
 
   /// Emit a conversion from the specified type to the specified destination
   /// type, both of which are LLVM scalar types.
-  Value *EmitScalarConversion(Value *Src, QualType SrcTy, QualType DstTy,
-                              SourceLocation Loc);
+
+  Value *EmitScalarConversion(Value *Src, QualType SrcTy, QualType DstTy, SourceLocation Loc, const Expr *E);
 
   Value *EmitScalarConversion(Value *Src, QualType SrcTy, QualType DstTy,
-                              SourceLocation Loc, bool TreatBooleanAsSigned);
+							  SourceLocation Loc, bool TreatBooleanAsSigned, const Expr *E);
 
   /// Emit a conversion from the specified complex type to the specified
   /// destination type, where the destination type is an LLVM scalar type.
@@ -731,17 +736,24 @@ void ScalarExprEmitter::EmitFloatConversionCheck(
 /// both of which are LLVM scalar types.
 Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
                                                QualType DstType,
-                                               SourceLocation Loc) {
-  return EmitScalarConversion(Src, SrcType, DstType, Loc, false);
+											   SourceLocation Loc, const Expr *E) {
+
+	return EmitScalarConversion(Src, SrcType, DstType, Loc, false, E);
 }
 
 Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
                                                QualType DstType,
                                                SourceLocation Loc,
-                                               bool TreatBooleanAsSigned) {
+											   bool TreatBooleanAsSigned, const Expr *E) {
+
   SrcType = CGF.getContext().getCanonicalType(SrcType);
   DstType = CGF.getContext().getCanonicalType(DstType);
-  if (SrcType == DstType) return Src;
+
+  llvm::outs() << ">>> EmitScalarConv, SrcType: " << SrcType.getAsString()
+	       << ", DstType: " << DstType.getAsString() << "\n";
+  if (SrcType == DstType) {
+	return Src;
+  }
 
   if (DstType->isVoidType()) return nullptr;
 
@@ -781,8 +793,14 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   }
 
   // Ignore conversions like int -> uint.
-  if (SrcTy == DstTy)
-    return Src;
+  if (SrcTy == DstTy) {
+     llvm::Value *Zero = llvm::Constant::getNullValue(SrcTy);
+     
+     EmitTruncCheck(Builder.CreateICmpSGE(Src, Zero),
+                    Src, SrcType, DstType, E);
+     return Src;
+  }
+
 
   // Handle pointer conversions next: pointers can only be converted to/from
   // other pointers and integers. Check for pointer types in terms of LLVM, as
@@ -858,19 +876,108 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (SrcType->isBooleanType() && TreatBooleanAsSigned) {
       InputSigned = true;
     }
-    if (isa<llvm::IntegerType>(DstTy))
+    
+    if (isa<llvm::IntegerType>(DstTy)) {
+    
+      // Peng begin -----------------------------
+      if (CGF.SanOpts.has(SanitizerKind::Other)) {
+
+        llvm::outs() << "NOW PENG's Routine running\n";
+        llvm::outs() << "SrcType bits : " << SrcTy->getScalarSizeInBits() << ", DstType bits: " << DstTy->getScalarSizeInBits() << "\n";
+        bool dstSigned = DstType->isSignedIntegerOrEnumerationType();
+
+        if (InputSigned == dstSigned) {
+          // (signed) dst = (signed) src || (unsigned) dst = (unsigned) src;
+          const llvm::IntegerType *DTy = cast<llvm::IntegerType>(DstTy);
+          llvm::Value *IntMax = NULL;
+          llvm::Value *IntMin = NULL;
+          if (dstSigned) {
+            IntMax = llvm::ConstantInt::get(VMContext,
+                             llvm::APInt::getSignedMaxValue(DTy->getBitWidth()));
+            IntMin = llvm::ConstantInt::get(VMContext,
+                             llvm::APInt::getSignedMinValue(DTy->getBitWidth()));
+          }
+           else {
+            IntMax = llvm::ConstantInt::get(VMContext,
+                             llvm::APInt::getMaxValue(DTy->getBitWidth()));
+            IntMin = llvm::ConstantInt::get(VMContext,
+                             llvm::APInt::getMinValue(DTy->getBitWidth()));
+          }
+
+          if (SrcTy->getScalarSizeInBits() > DstTy->getScalarSizeInBits()) {
+            // truncation, potentially there is data loss..
+            if (dstSigned) {
+              EmitTruncCheck(Builder.CreateAnd(
+                  Builder.CreateICmpSGE(Src, Builder.CreateSExt(IntMin, SrcTy)),
+                  Builder.CreateICmpSLE(Src, Builder.CreateSExt(IntMax, SrcTy)), 
+					"and"),
+                  Src, SrcType, DstType, E);
+            }
+	    else {
+               EmitTruncCheck(Builder.CreateAnd(
+                  Builder.CreateICmpUGE(Src, Builder.CreateZExt(IntMin, SrcTy)),
+                  Builder.CreateICmpULE(Src, Builder.CreateZExt(IntMax, SrcTy)), 
+					"and"),
+                  Src, SrcType, DstType, E);
+            }
+          }
+        }
+        else {
+          const llvm::IntegerType *DTy = cast<llvm::IntegerType>(DstTy);
+          if (dstSigned) {
+            if (SrcTy->getScalarSizeInBits() >= DstTy->getScalarSizeInBits()) {
+	      // (signed) dst = (unsigned) src;
+              llvm::Value *UUpperB = llvm::ConstantInt::get(VMContext,
+                                   llvm::APInt::getMaxValue(DTy->getBitWidth()-1));
+
+              EmitTruncCheck(Builder.CreateICmpULE(Src,
+                                   Builder.CreateZExt(UUpperB, SrcTy)),
+                             Src, SrcType, DstType, E);
+            }
+          }
+        else {
+	    // (unsigned) dst = (signed) src;
+            llvm::Value *Zero = llvm::Constant::getNullValue(SrcTy);
+	    /*llvm::outs() << "SrcType bits : " << SrcTy->getScalarSizeInBits()
+	       	         << ", DstType bits: " << DstTy->getScalarSizeInBits()
+			 << "\n";*/
+
+            if (SrcTy->getScalarSizeInBits() > DstTy->getScalarSizeInBits()) {
+              llvm::Value *UIntMax = llvm::ConstantInt::get(VMContext,
+                         llvm::APInt::getMaxValue(DTy->getBitWidth()));
+
+              EmitTruncCheck(Builder.CreateAnd(
+			     Builder.CreateICmpSGE(Src, Zero),
+			     Builder.CreateICmpSLE(Src, 
+						   Builder.CreateZExt(UIntMax, SrcTy)), 
+						   "and"),
+                             Src, SrcType, DstType, E);
+            } else {
+              EmitTruncCheck(Builder.CreateICmpSGE(Src, Zero),
+                             Src, SrcType, DstType, E);
+            }
+          }
+        }
+      }
+      // Peng end -----------------------------
+  
       Res = Builder.CreateIntCast(Src, DstTy, InputSigned, "conv");
-    else if (InputSigned)
+    
+    
+    
+  } else if (InputSigned)
       Res = Builder.CreateSIToFP(Src, DstTy, "conv");
     else
       Res = Builder.CreateUIToFP(Src, DstTy, "conv");
-  } else if (isa<llvm::IntegerType>(DstTy)) {
+  }  
+  else if (isa<llvm::IntegerType>(DstTy)) {
     assert(SrcTy->isFloatingPointTy() && "Unknown real conversion");
     if (DstType->isSignedIntegerOrEnumerationType())
       Res = Builder.CreateFPToSI(Src, DstTy, "conv");
     else
       Res = Builder.CreateFPToUI(Src, DstTy, "conv");
-  } else {
+  } 
+  else {
     assert(SrcTy->isFloatingPointTy() && DstTy->isFloatingPointTy() &&
            "Unknown real conversion");
     if (DstTy->getTypeID() < SrcTy->getTypeID())
@@ -904,8 +1011,10 @@ Value *ScalarExprEmitter::EmitComplexToScalarConversion(
   // Handle conversions to bool first, they are special: comparisons against 0.
   if (DstTy->isBooleanType()) {
     //  Complex != 0  -> (Real != 0) | (Imag != 0)
-    Src.first = EmitScalarConversion(Src.first, SrcTy, DstTy, Loc);
-    Src.second = EmitScalarConversion(Src.second, SrcTy, DstTy, Loc);
+    //--Src.first = EmitScalarConversion(Src.first, SrcTy, DstTy, Loc);
+    //--Src.second = EmitScalarConversion(Src.second, SrcTy, DstTy, Loc)
+	Src.first = EmitScalarConversion(Src.first, SrcTy, DstTy, Loc, NULL);
+    Src.second = EmitScalarConversion(Src.second, SrcTy, DstTy, Loc, NULL);
     return Builder.CreateOr(Src.first, Src.second, "tobool");
   }
 
@@ -913,12 +1022,69 @@ Value *ScalarExprEmitter::EmitComplexToScalarConversion(
   // the imaginary part of the complex value is discarded and the value of the
   // real part is converted according to the conversion rules for the
   // corresponding real type.
-  return EmitScalarConversion(Src.first, SrcTy, DstTy, Loc);
+  return EmitScalarConversion(Src.first, SrcTy, DstTy, Loc, NULL);
 }
 
 Value *ScalarExprEmitter::EmitNullValue(QualType Ty) {
   return CGF.EmitFromMemory(CGF.CGM.EmitNullConstant(Ty), Ty);
 }
+
+/*
+ * new
+ * void CodeGenFunction::EmitCheck(
+   ArrayRef<std::pair<llvm::Value *, SanitizerMask>> Checked,
+   StringRef CheckName,
+   ArrayRef<llvm::Constant *> StaticArgs,
+   ArrayRef<llvm::Value *> DynamicArgs)
+*/
+/*
+ * Original code from Yimin
+ *
++void ScalarExprEmitter::EmitTruncCheck(Value *Check, Value *Src,
++				       QualType SrcType, QualType DstType,
++			  	       const Expr *E) {
++  StringRef CheckName;
++  SmallVector<llvm::Constant *, 4> StaticData;
++  SmallVector<llvm::Value *, 2> DynamicData;
++
++  CheckName = "truncation";
++  if (E) {
++    StaticData.push_back(CGF.EmitCheckSourceLocation(E->getExprLoc()));
++  }
++  StaticData.push_back(CGF.EmitCheckTypeDescriptor(SrcType));
++  StaticData.push_back(CGF.EmitCheckTypeDescriptor(DstType));
++  DynamicData.push_back(Src);
++  CGF.EmitCheck(Check, CheckName, StaticData, DynamicData,
++                CodeGenFunction::CRK_Recoverable);
++}
++
+*/
+void ScalarExprEmitter::EmitTruncCheck( Value *Check,
+                                        Value *Src, 
+				       QualType SrcType, QualType DstType, 
+			  	       const Expr *E) {
+  //assert(CGF.IsSanitizerScope);
+  StringRef CheckName;
+  SmallVector<llvm::Constant *, 4> StaticData;
+  SmallVector<llvm::Value *, 2> DynamicData;
+
+  CheckName = "truncation";
+  if (E) {
+    StaticData.push_back(CGF.EmitCheckSourceLocation(E->getExprLoc()));
+  }
+  StaticData.push_back(CGF.EmitCheckTypeDescriptor(SrcType));
+  StaticData.push_back(CGF.EmitCheckTypeDescriptor(DstType));
+  DynamicData.push_back(Src);
+  
+  SmallVector<std::pair<llvm::Value *, SanitizerMask>, 2> Checks;
+  Checks.push_back(
+        std::make_pair(Check, SanitizerKind::Other));
+  
+  CGF.EmitCheck(Checks, CheckName, StaticData, DynamicData);
+      	  	  	  	  	  //CodeGenFunction::CRK_Recoverable);
+}
+
+
 
 /// \brief Emit a sanitization check for the given "binary" operation (which
 /// might actually be a unary increment which has been lowered to a binary
@@ -1543,6 +1709,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_VectorSplat: {
     llvm::Type *DstTy = ConvertType(DestTy);
     Value *Elt = Visit(const_cast<Expr*>(E));
+
+    Elt = EmitScalarConversion(Elt, E->getType(),
+                               DestTy->getAs<VectorType>()->getElementType(), CE->getExprLoc(), E);
+
     // Splat the element across to all elements
     unsigned NumElements = cast<llvm::VectorType>(DstTy)->getNumElements();
     return Builder.CreateVectorSplat(NumElements, Elt, "splat");
@@ -1553,11 +1723,14 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_FloatingToIntegral:
   case CK_FloatingCast:
     return EmitScalarConversion(Visit(E), E->getType(), DestTy,
-                                CE->getExprLoc());
+                                CE->getExprLoc(), //);
+	//++
+								E);
+
   case CK_BooleanToSignedIntegral:
     return EmitScalarConversion(Visit(E), E->getType(), DestTy,
                                 CE->getExprLoc(),
-                                /*TreatBooleanAsSigned=*/true);
+                                /*TreatBooleanAsSigned=*/true, E);
   case CK_IntegralToBoolean:
     return EmitIntToBoolConversion(Visit(E));
   case CK_PointerToBoolean:
@@ -2155,9 +2328,7 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
       }
       if (aop != llvm::AtomicRMWInst::BAD_BINOP) {
         llvm::Value *amt = CGF.EmitToMemory(
-            EmitScalarConversion(OpInfo.RHS, E->getRHS()->getType(), LHSTy,
-                                 E->getExprLoc()),
-            LHSTy);
+            EmitScalarConversion(OpInfo.RHS, E->getRHS()->getType(), LHSTy, E->getExprLoc(), E), LHSTy);
         Builder.CreateAtomicRMW(aop, LHSLV.getPointer(), amt,
             llvm::SequentiallyConsistent);
         return LHSLV;
@@ -2180,14 +2351,14 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
 
   SourceLocation Loc = E->getExprLoc();
   OpInfo.LHS =
-      EmitScalarConversion(OpInfo.LHS, LHSTy, E->getComputationLHSType(), Loc);
+      EmitScalarConversion(OpInfo.LHS, LHSTy, E->getComputationLHSType(), Loc, E);
 
   // Expand the binary operator.
   Result = (this->*Func)(OpInfo);
 
   // Convert the result back to the LHS type.
   Result =
-      EmitScalarConversion(Result, E->getComputationResultType(), LHSTy, Loc);
+      EmitScalarConversion(Result, E->getComputationResultType(), LHSTy, Loc, E);
 
   if (atomicPHI) {
     llvm::BasicBlock *opBB = Builder.GetInsertBlock();
@@ -2912,7 +3083,7 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,
       llvm::Function *F = CGF.CGM.getIntrinsic(ID);
       Result = Builder.CreateCall(F, {CR6Param, FirstVecArg, SecondVecArg});
       return EmitScalarConversion(Result, CGF.getContext().BoolTy, E->getType(),
-                                  E->getExprLoc());
+                                  E->getExprLoc(), E);
     }
 
     if (LHS->getType()->isFPOrFPVectorTy()) {
@@ -2975,7 +3146,7 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,
   }
 
   return EmitScalarConversion(Result, CGF.getContext().BoolTy, E->getType(),
-                              E->getExprLoc());
+                              E->getExprLoc(), E);
 }
 
 Value *ScalarExprEmitter::VisitBinAssign(const BinaryOperator *E) {
@@ -3462,7 +3633,7 @@ Value *CodeGenFunction::EmitScalarConversion(Value *Src, QualType SrcTy,
                                              SourceLocation Loc) {
   assert(hasScalarEvaluationKind(SrcTy) && hasScalarEvaluationKind(DstTy) &&
          "Invalid scalar expression to emit");
-  return ScalarExprEmitter(*this).EmitScalarConversion(Src, SrcTy, DstTy, Loc);
+  return ScalarExprEmitter(*this).EmitScalarConversion(Src, SrcTy, DstTy, Loc, NULL);
 }
 
 /// Emit a conversion from the specified complex type to the specified
