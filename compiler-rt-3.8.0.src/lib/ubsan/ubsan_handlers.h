@@ -60,6 +60,18 @@ RECOVERABLE(negate_overflow, OverflowData *Data, ValueHandle OldVal)
 RECOVERABLE(divrem_overflow, OverflowData *Data,
             ValueHandle LHS, ValueHandle RHS)
 
+
+struct TruncationData {
+  SourceLocation Loc;
+  const TypeDescriptor &SrcType;
+  const TypeDescriptor &DstType; 
+};
+
+/// \brief Handle the scalar type conversion that may lead to data loss.
+RECOVERABLE(truncation, TruncationData *Data,
+            ValueHandle Src)
+
+
 struct ShiftOutOfBoundsData {
   SourceLocation Loc;
   const TypeDescriptor &LHSType;
