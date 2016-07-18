@@ -203,6 +203,17 @@ static void handleDivremOverflowImpl(OverflowData *Data, ValueHandle LHS,
   }
 }
 
+void __ubsan::__ubsan_handle_truncation(TruncationData *Data, 
+				   	ValueHandle Src) {
+  SourceLocation Loc = Data->Loc.acquire();
+  if (Loc.isDisabled())
+    return;
+
+  Value SrcVal(Data->SrcType, Src);
+  Diag(Loc, DL_Error, 
+       "value (%0) in type %1 cannot be represented in type %2") << SrcVal << Data->SrcType << Data->DstType;
+}
+
 void __ubsan::__ubsan_handle_divrem_overflow(OverflowData *Data,
                                              ValueHandle LHS, ValueHandle RHS) {
   GET_REPORT_OPTIONS(false);
