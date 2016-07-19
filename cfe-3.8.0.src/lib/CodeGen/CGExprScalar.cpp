@@ -749,8 +749,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   SrcType = CGF.getContext().getCanonicalType(SrcType);
   DstType = CGF.getContext().getCanonicalType(DstType);
 
-  llvm::outs() << ">>> EmitScalarConv, SrcType: " << SrcType.getAsString()
-	       << ", DstType: " << DstType.getAsString() << "\n";
+  //llvm::outs() << ">>> EmitScalarConv, SrcType: " << SrcType.getAsString()
+  //       << ", DstType: " << DstType.getAsString() << "\n";
   if (SrcType == DstType) {
 	return Src;
   }

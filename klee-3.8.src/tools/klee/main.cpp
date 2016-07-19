@@ -615,9 +615,9 @@ std::string KleeHandler::getRunTimeLibraryPath(const char *argv0) {
 
   SmallString<128> libDir;
 
-  #define KLEE_DIR "./klee_build"
-  #define KLEE_INSTALL_BIN_DIR "./klee_build"
-  #define KLEE_INSTALL_RUNTIME_DIR "./klee_build"
+  #define KLEE_DIR "../klee_build"
+  #define KLEE_INSTALL_BIN_DIR "../klee_build"
+  #define KLEE_INSTALL_RUNTIME_DIR "../klee_build"
 
   if (strlen( KLEE_INSTALL_BIN_DIR ) != 0 &&
       strlen( KLEE_INSTALL_RUNTIME_DIR ) != 0 &&
@@ -640,6 +640,9 @@ std::string KleeHandler::getRunTimeLibraryPath(const char *argv0) {
 
   KLEE_DEBUG_WITH_TYPE("klee_runtime", llvm::dbgs() <<
                        libDir.c_str() << "\n");
+
+  //workaround to get linked runtime intrinsic lib
+  libDir = "../klee_runtime";
   return libDir.str();
 }
 

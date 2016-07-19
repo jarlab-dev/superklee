@@ -1,7 +1,8 @@
 PROJECT ( klee )
 CMAKE_MINIMUM_REQUIRED ( VERSION 2.8.8 FATAL_ERROR )
 
-ADD_SUBDIRECTORY(runtime/Intrinsic)
+#TODO: fix cmakelist for runtime libs
+#ADD_SUBDIRECTORY(runtime/Intrinsic)
 
 
 #########################
