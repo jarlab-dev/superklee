@@ -110,6 +110,8 @@ README-1st.txt
 > llvm-dis signed_f-sanit.bc
 > cat signed_f-sanit.ll
 
+> ../klee_build/klee-3.8 signed_fsanit.bc
+
 # ------------------------------------------------------
 
 
