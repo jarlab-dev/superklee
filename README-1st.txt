@@ -9,7 +9,7 @@
 
 cfe-3.8.0.src (This is ported Clang 3.8b)       
 cfe_build
-compiler-rt-3.8.0.src
+compiler-rt-3.8.0.src (This is ported Compiler 3.8b)
 compiler-rt_build  
 llvm-3.8.0.src  
 llvm_build
@@ -23,18 +23,18 @@ Tests
 README-1st.txt  
                     
 # ------------------------------------------------------
-# 2 - LLVM Libraries Build
+# 2 - LLVM Libraries Build (sources cloned llvm.org)
 # ------------------------------------------------------
 # LLVM - Compiler-Rt and Clang have been all placed in 
 # superklee project root directory (not as specified by
 # llvm documentation, then they have to be build each on
 # its own)
 
-# LLVM - Compiler-Rt : it was executed the install 
+# LLVM: it was executed the install 
 # command, path for install is /usr/local/bin
 
-> tar -xvf 
-> tar -xvf
+> tar -xvf llvm-3.8.0.src.tar.xz
+
 > mkdir llmv_build
 > mkdir compiler-rt-build
 
@@ -43,14 +43,16 @@ README-1st.txt
 > cmake --build .
 > sudo cmake --build . --target install
 > cd ..
+
+# ------------------------------------------------------
+# 3 - CLANG 3.8b and Compiler-rt 3.8b (sources cloned from repo)
+# ------------------------------------------------------
+
 > cd compiler_rt_build
 > cmake ../compiler-rt-3.8.0.src
 > cmake --build .
 > sudo cmake --build . --target install
 > cd ..
-
-# ------------------------------------------------------
-# 3 - CLANG 3.8b (sources cloned from repo)
 
 > mkdir cfe_build
 > cd cfe_build
@@ -64,7 +66,6 @@ README-1st.txt
 # //assert(IsSanitizerScope);
 # - Warning: left behind debugging messages that 
 # will generate following mesagges:
-# >>> EmitScalarConv, SrcType: long, DstType: int
 # NOW PENG's Routine running
 # SrcType bits : 64, DstType bits: 32
 
@@ -105,7 +106,7 @@ README-1st.txt
 # 5 - TESTS COMPLIE & RUN
 # ------------------------------------------------------
 > cd Tests
-> ../cfe_build/bin/clang -I../klee/include/klee -c -emit-llvm -fsanitize=other signed.c
+> ../cfe_build/bin/clang -I../klee-3.8.src/include/klee -c -emit-llvm -fsanitize=other signed.c
 > mv signed.bc signed_f-sanit.bc
 > llvm-dis signed_f-sanit.bc
 > cat signed_f-sanit.ll
