@@ -1,4 +1,5 @@
 #Usage
+#TODO: complete definitions
 #cmake -DLLVM_DIR  -DSUPERKLEE_DIR
 
 PROJECT (klee_setup)
@@ -13,24 +14,20 @@ SET(SUPERKLEE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
 if ("${LLVM_DIR}" STREQUAL "") 
 	  SET(LLVM_DIR "/usr/local/bin")
 	  message( STATUS "LLVM From: ${LLVM_DIR}")
-
 else ()
       message( STATUS "LLVM From: ${LLVM_DIR}")
 endif()
 
 #--
-#execute_process(COMMAND tar -xvf llvm-3.8.0.src.tar.xz WORKING_DIRECTORY ${SUPERKLEE_DIR})
-#execute_process(COMMAND mkdir llvm_build WORKING_DIRECTORY ${SUPERKLEE_DIR})
+#TODO: set checks of already existing dirs & git sources
+execute_process(COMMAND tar -xvf llvm-3.8.0.src.tar.xz WORKING_DIRECTORY ${SUPERKLEE_DIR})
+execute_process(COMMAND mkdir llvm_build WORKING_DIRECTORY ${SUPERKLEE_DIR})
 execute_process(COMMAND cmake -DLLVM_TARGETS_TO_BUILD=X86 ${SUPERKLEE_DIR}/llvm-3.8.0.src WORKING_DIRECTORY ${SUPERKLEE_DIR}/llvm_build)
 execute_process(COMMAND cmake --build . WORKING_DIRECTORY ${SUPERKLEE_DIR}/llvm_build)
-execute_process(COMMAND cmake --build . --target install WORKING_DIRECTORY ${SUPERKLEE_DIR}/llvm_build)
-
+execute_process(COMMAND sudo cmake --build . --target install WORKING_DIRECTORY ${SUPERKLEE_DIR}/llvm_build)
 execute_process(COMMAND mkdir compiler-rt_build WORKING_DIRECTORY ${SUPERKLEE_DIR})
 execute_process(COMMAND cmake ${SUPERKLEE_DIR}/compiler-rt-3.8.0.src WORKING_DIRECTORY ${SUPERKLEE_DIR}/compiler-rt_build)
 execute_process(COMMAND cmake --build . WORKING_DIRECTORY ${SUPERKLEE_DIR}/compiler-rt_build)
-# sudo cmake --build . --target install
-
-#TODO: set checks of already existing dirs & git sources
 execute_process(COMMAND mkdir cfe_build WORKING_DIRECTORY ${SUPERKLEE_DIR})
 execute_process(COMMAND cmake ${SUPERKLEE_DIR}/cfe-3.8.0.src WORKING_DIRECTORY ${SUPERKLEE_DIR}/cfe_build)
 execute_process(COMMAND cmake --build . WORKING_DIRECTORY ${SUPERKLEE_DIR}/cfe_build)
@@ -45,9 +42,7 @@ execute_process(COMMAND cmake -DBUILD_SHARED_LIBS:BOOL=OFF -DENABLE_PYTHON_INTER
 execute_process(COMMAND cmake --build . WORKING_DIRECTORY ${SUPERKLEE_DIR}/stp_build)
 execute_process(COMMAND mkdir klee_build WORKING_DIRECTORY ${SUPERKLEE_DIR})
 execute_process(COMMAND cmake -DLLVM_DIR=${LLVM_DIR} ${SUPERKLEE_DIR}/klee-3.8.src WORKING_DIRECTORY ${SUPERKLEE_DIR}/klee_build)
-
-
-
+execute_process(COMMAND cmake --build . WORKING_DIRECTORY ${SUPERKLEE_DIR}/klee_build)
 
 ## BY-NOW using pre-build library
 ## Clang version is not the ported one (3.8b)
