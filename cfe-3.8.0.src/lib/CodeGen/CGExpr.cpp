@@ -2464,7 +2464,10 @@ void CodeGenFunction::EmitCheck(
   assert(JointCond);
 
   CheckRecoverableKind RecoverKind = getRecoverableKind(Checked[0].second);
+
+
   assert(SanOpts.has(Checked[0].second));
+
 #ifndef NDEBUG
   for (int i = 1, n = Checked.size(); i < n; ++i) {
     assert(RecoverKind == getRecoverableKind(Checked[i].second) &&
